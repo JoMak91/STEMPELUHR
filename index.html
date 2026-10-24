@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d6b6e">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192-1.png">
+<link rel="apple-touch-icon" href="icon-192-1.png">
 <title>Stempeluhr</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -66,6 +66,11 @@ header h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spa
 .paused .timer{color:var(--muted)}
 .soll-line{font-size:13px;text-align:center;background:var(--soft);border-radius:8px;padding:7px 12px;margin-top:6px;line-height:1.5}
 .okc{color:var(--j3);font-weight:600}
+.alarms{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.alarms a,.alarms button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:500;text-decoration:none}
+.alarms .num{font-weight:600}
+.alarms .bell{border-color:var(--accent);color:var(--accent)}
+.warnbar{background:var(--run-soft);border:1px solid var(--run);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px;text-align:center}
 .hintc{color:var(--muted);font-size:12px}
 .soll{display:flex;flex-direction:column;gap:8px}
 .sollrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -190,6 +195,8 @@ textarea.out{width:100%;height:160px;font-family:var(--f-mono);font-size:11px;bo
       <div class="status" id="status">Bereit zum Einstempeln</div>
       <div class="soll-line" id="sollLine" hidden></div>
     </div>
+    <div class="warnbar" id="warnbar" hidden></div>
+    <div class="alarms" id="alarms" hidden></div>
     <input class="note" id="note" placeholder="Notiz (optional), z. B. Inventur, Hochzeit Saal 2" maxlength="140">
     <div class="actions" id="actions"></div>
   </section>
@@ -229,9 +236,9 @@ textarea.out{width:100%;height:160px;font-family:var(--f-mono);font-size:11px;bo
 (() => {
 const COLORS = 6;
 const DEFAULT_JOBS = [
-  {id:"j_wiesenhof", name:"Wiesenhof", color:0, rate:0, target:41, autoPause:true},
-  {id:"j_kellnern", name:"Kellnern", color:1, rate:0, target:0, autoPause:false},
-  {id:"j_tecis", name:"tecis", color:2, rate:0, target:0, autoPause:false}
+  {id:"j_wiesenhof", name:"Wiesenhof", color:0, rate:0, target:41},
+  {id:"j_kellnern", name:"Kellnern", color:1, rate:0, target:0},
+  {id:"j_tecis", name:"tecis", color:2, rate:0, target:0}
 ];
 const S = { jobs: DEFAULT_JOBS.map(j=>({...j})), running:null, months:{}, sel: DEFAULT_JOBS[0].id };
 const UI = { view:"week", anchor:new Date() };
@@ -257,24 +264,15 @@ const uid = () => Math.random().toString(36).slice(2,9)+Date.now().toString(36).
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const pauseMs = (pauses, now) => (pauses||[]).reduce((a,p)=>a+((p.e??now)-p.s),0);
 const H=3600000, MIN=60000;
-/* Gesetzliche Pause (§4 ArbZG): über 6 h Arbeit 30 min, über 9 h 45 min.
-   Abgezogen wird nur so viel, dass die Arbeitszeit nicht unter 6:00 bzw. 9:00 fällt. */
-function effPause(j, gross, raw){
-  if(!j.autoPause) return raw;
-  let q=raw;
-  if(gross>6*H) q=Math.max(q, Math.min(30*MIN, gross-6*H));
-  if(gross-q>9*H) q=Math.max(q, Math.min(45*MIN, gross-9*H));
-  return q;
-}
-const ePause = e => effPause(jobById(e.job), e.end-e.start, e.pause||0);
+/* Pausen zählen nur, wenn sie per Pause-Knopf gestempelt oder beim Nachtragen eingegeben wurden. */
+const ePause = e => e.pause||0;
 const net = e => e.end - e.start - ePause(e);
 const dailyTarget = j => (j.target||0)/5*H;
 const isWorkday = d => d.getDay()>=1 && d.getDay()<=5;
 function targetIn(j,a,b,untilToday){ const lim=untilToday?addDays(sod(new Date()),1):b; let n=0; for(let d=new Date(a); d<b && d<lim; d=addDays(d,1)) if(isWorkday(d)) n++; return n*dailyTarget(j); }
 const signed = ms => (ms<0?"−":"+")+fmtHM(Math.abs(ms));
 function normalizeJobs(){ S.jobs=S.jobs.map(j=>({...j,
-  target: j.target!==undefined ? j.target : (j.id==="j_wiesenhof"?41:0),
-  autoPause: j.autoPause!==undefined ? j.autoPause : j.id==="j_wiesenhof" })); }
+  target: j.target!==undefined ? j.target : (j.id==="j_wiesenhof"?41:0) })); }
 function isoWeek(d){ const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); const y=new Date(Date.UTC(t.getUTCFullYear(),0,1)); return Math.ceil(((t-y)/86400000+1)/7); }
 
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); }
@@ -308,6 +306,7 @@ function safeGet(){ try{ return localStorage.getItem(LS); }catch(e){ return null
 function start(){
   S.running={job:S.sel, start:Date.now(), pauses:[], note:$("note").value.trim()};
   saveSettings(); render(); toast("Eingestempelt");
+  askNotify();
 }
 function togglePause(){
   const r=S.running; if(!r) return;
@@ -358,7 +357,7 @@ function renderClock(){
   const a=$("actions");
   if(!r){ a.className="actions"; a.innerHTML=`<button class="btn-big btn-start" id="bStart">Start</button>`; }
   else { a.className="actions two"; a.innerHTML=`<button class="btn-big btn-pause" id="bPause">${paused?"Weiter":"Pause"}</button><button class="btn-big btn-stop" id="bStop">Stopp</button>`; }
-  tick();
+  tick(); renderAlarms();
 }
 function tick(){
   const r=S.running, now=Date.now();
@@ -376,6 +375,7 @@ function tick(){
   $("timer").innerHTML=`${Math.floor(s/3600)}<span class="colon">:</span>${pad(Math.floor(s/60)%60)}<span class="s">:${pad(s%60)}</span>`;
   $("status").innerHTML=st;
   sollLine();
+  checkReminders();
 }
 function sollLine(){
   const el=$("sollLine"), r=S.running, j=jobById(r?r.job:S.sel), today=sod(new Date());
@@ -390,15 +390,74 @@ function sollLine(){
     txt+=`noch <b class="num">${fmtHM(rest)}</b>`;
     const paused=r && r.pauses.length && r.pauses[r.pauses.length-1].e==null;
     if(r && !paused){
-      // Brutto-Zeit, bei der die laufende Schicht inkl. gesetzlicher Pause das Restsoll erreicht
-      const R=T-done, P=pauseMs(r.pauses,Date.now());
-      let G=R+P; G=R+effPause(j,G,P); G=R+effPause(j,G,P);
-      txt+=` · Feierabend ca. <b class="num">${hm(r.start+G)}</b>`;
+      txt+=` · Feierabend ca. <b class="num">${hm(Date.now()+rest)}</b>`;
     }
   }
-  if(r && j.autoPause){ const g=Date.now()-r.start, P=pauseMs(r.pauses,Date.now()), q=effPause(j,g,P);
-    if(q>P) txt+=`<br><span class="hintc">Gesetzliche Pause: ${fmtHM(q-P)} werden automatisch abgezogen</span>`; }
   el.innerHTML=txt; el.hidden=false;
+}
+
+/* ---------- Erinnerungen ---------- */
+const LEAD=15*MIN, MAXDAY=10*H;
+function todayNet(filterJob){
+  const t=sod(new Date());
+  let ms=entriesIn(t,addDays(t,1)).filter(e=>!filterJob||e.job===filterJob).reduce((s,e)=>s+net(e),0);
+  const live=liveEntry(); if(live && (!filterJob||live.job===filterJob)) ms+=net(live);
+  return ms;
+}
+// verbleibende Netto-Zeit bis Soll bzw. 10 h (null = kein Ziel)
+function remaining(){
+  const r=S.running; if(!r) return {};
+  const j=jobById(r.job), T=dailyTarget(j);
+  return {
+    soll: T && isWorkday(new Date()) ? T-todayNet(j.id) : null,
+    max: MAXDAY-todayNet(null), job:j, T
+  };
+}
+function notifyPerm(){ return ("Notification" in window) ? Notification.permission : "unsupported"; }
+function askNotify(){
+  if(notifyPerm()!=="default") return;
+  try{ Notification.requestPermission().then(()=>renderAlarms()); }catch(e){}
+}
+async function notify(title, body, tag){
+  toast(title); showWarn(`<b>${esc(title)}</b><br>${esc(body)}`);
+  try{ navigator.vibrate && navigator.vibrate([250,120,250]); }catch(e){}
+  if(notifyPerm()!=="granted") return;
+  const opt={body, tag, icon:"icon-192-1.png", badge:"icon-192-1.png", vibrate:[250,120,250], renotify:true, requireInteraction:true};
+  try{ const reg=await navigator.serviceWorker?.ready; if(reg){ await reg.showNotification(title,opt); return; } }catch(e){}
+  try{ new Notification(title,opt); }catch(e){}
+}
+function showWarn(html){ const w=$("warnbar"); w.innerHTML=html; w.hidden=false; clearTimeout(showWarn._t); showWarn._t=setTimeout(()=>w.hidden=true, 15*MIN); }
+function checkReminders(){
+  const r=S.running; if(!r) return;
+  r.notified ||= {};
+  const paused=r.pauses.length && r.pauses[r.pauses.length-1].e==null;
+  const {soll,max,T}=remaining();
+  let changed=false;
+  if(soll!=null && !r.notified.soll){
+    if(soll<=0){ r.notified.soll=true; changed=true; }                       // schon erreicht beim Öffnen
+    else if(soll<=LEAD && !paused){ r.notified.soll=true; changed=true;
+      notify(`Noch ${Math.ceil(soll/MIN)} Minuten bis ${fmtHM(T)} h`, `Um ${hm(Date.now()+soll)} hast du dein Tagessoll erreicht.`, "soll"); }
+  }
+  if(!r.notified.max){
+    if(max<=0){ r.notified.max=true; changed=true; }
+    else if(max<=LEAD && !paused){ r.notified.max=true; changed=true;
+      notify(`Noch ${Math.ceil(max/MIN)} Minuten bis 10 Stunden`, `Um ${hm(Date.now()+max)} erreichst du die gesetzliche Höchstarbeitszeit von 10 Stunden.`, "max"); }
+  }
+  if(changed) saveSettings();
+}
+// Android-Wecker: öffnet die Uhr-App mit vorausgefüllter Weckzeit
+function alarmHref(time, msg){
+  const d=new Date(time);
+  return `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR=${d.getHours()};i.android.intent.extra.alarm.MINUTES=${d.getMinutes()};S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent(msg)};B.android.intent.extra.alarm.SKIP_UI=true;end`;
+}
+function renderAlarms(){
+  const el=$("alarms"), r=S.running;
+  if(!r){ el.hidden=true; $("warnbar").hidden=true; return; }
+  const {soll,max,T}=remaining(); const now=Date.now(); const out=[];
+  if(soll!=null && soll>LEAD){ const t=now+soll-LEAD; out.push(`<a href="${alarmHref(t,"Stempeluhr: noch 15 Min bis "+fmtHM(T)+" h")}">⏰ Wecker ${fmtHM(T)} h <span class="num">${hm(t)}</span></a>`); }
+  if(max>LEAD){ const t=now+max-LEAD; out.push(`<a href="${alarmHref(t,"Stempeluhr: noch 15 Min bis 10 Stunden")}">⏰ Wecker 10 h <span class="num">${hm(t)}</span></a>`); }
+  if(notifyPerm()==="default") out.push(`<button class="bell" id="bNotify">🔔 Benachrichtigungen erlauben</button>`);
+  el.innerHTML=out.join(""); el.hidden=!out.length;
 }
 
 function renderReport(){
@@ -467,7 +526,7 @@ function renderReport(){
   $("days").innerHTML = keys.map(k=>{
     const d=new Date(groups[k][0].start); const sum=groups[k].reduce((s,e)=>s+net(e),0);
     return `<div class="day"><h3><span>${WD[d.getDay()]}, ${d.getDate()}. ${MON[d.getMonth()].slice(0,3)}.</span><span class="num">${fmtHM(sum)} h</span></h3>${
-      groups[k].map(e=>{ const j=jobById(e.job); const ep=ePause(e); const meta=[ep>=60000?`Pause ${fmtHM(ep)}${ep>(e.pause||0)+30000?" (gesetzl.)":""}`:"", e.live?"läuft gerade":"", e.note?esc(e.note):""].filter(Boolean).join(" · ");
+      groups[k].map(e=>{ const j=jobById(e.job); const ep=ePause(e); const meta=[ep>=60000?`Pause ${fmtHM(ep)}`:"", e.live?"läuft gerade":"", e.note?esc(e.note):""].filter(Boolean).join(" · ");
         return `<button class="entry ${e.live?"live":""}" data-entry="${esc(e.id)}"><span class="t">${hm(e.start)}–${e.live?"jetzt":hm(e.end)}</span><span class="j"><span class="dot" style="display:inline-block;margin-right:6px;background:${jc(j)}"></span>${esc(j.name)}</span><span class="d">${fmtHM(net(e))}</span>${meta?`<span class="meta">${meta}</span>`:""}</button>`; }).join("")
     }</div>`;
   }).join("");
@@ -509,7 +568,7 @@ function entrySheet(id){
       <button class="sbtn" id="fCancel">Abbrechen</button>
       <button class="sbtn primary" id="fSave">Speichern</button>
     </div>`, sh=>{
-      const calc=()=>{ const r=readForm(); const ap = r.err ? 0 : ePause(r)-r.pause; $("fCalc").textContent = r.err ? "" : `Arbeitszeit: ${fmtHM(net(r))} h (${fmtDec(net(r))} h)${ap>0?` · inkl. ${fmtHM(ap)} gesetzl. Pause abgezogen`:""}${r.end-r.start>0 && new Date(r.end).getDate()!==new Date(r.start).getDate()?" · endet am Folgetag":""}`; };
+      const calc=()=>{ const r=readForm(); $("fCalc").textContent = r.err ? "" : `Arbeitszeit: ${fmtHM(net(r))} h (${fmtDec(net(r))} h)${r.end-r.start>0 && new Date(r.end).getDate()!==new Date(r.start).getDate()?" · endet am Folgetag":""}`; };
       sh.addEventListener("input",calc); calc();
       $("fCancel").onclick=closeSheet;
       $("fSave").onclick=()=>{
@@ -550,7 +609,7 @@ function liveSheet(){
         const [h,m]=$("lStart").value.split(":").map(Number); const d=new Date(r.start); d.setHours(h,m,0,0);
         if(d.getTime()>Date.now()) d.setDate(d.getDate()-1);
         if(Date.now()-d.getTime()>24*3600000){ $("lErr").textContent="Beginn liegt zu weit zurück."; return; }
-        r.start=d.getTime(); saveSettings(); closeSheet(); render(); toast("Beginn angepasst");
+        r.start=d.getTime(); r.notified={}; saveSettings(); closeSheet(); render(); toast("Beginn angepasst");
       };
       $("lDiscard").onclick=ev=>{ const b=ev.currentTarget; if(!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent="Wirklich verwerfen?"; return; }
         S.running=null; $("note").value=""; saveSettings(); closeSheet(); render(); toast("Laufende Zeit verworfen"); };
@@ -569,20 +628,19 @@ function jobsSheet(){
         <label class="mini">€ pro Stunde<input id="jr${i}" data-k="rate" type="number" min="0" step="0.5" inputmode="decimal" value="${j.rate||""}" placeholder="optional"></label>
         <label class="mini">Soll h/Woche<input id="jt${i}" data-k="target" type="number" min="0" max="80" step="0.5" inputmode="decimal" value="${j.target||""}" placeholder="kein Soll"></label>
       </div>
-      <label class="check"><input id="ja${i}" type="checkbox" data-k="autoPause" ${j.autoPause?"checked":""}> Gesetzliche Pause automatisch abziehen</label>
     </div>`).join("");
   openSheet(`<h2>Jobs</h2>
-    <div class="hint">Farbkreis antippen zum Wechseln. Das Soll wird auf Mo–Fr verteilt (41 h = 8:12 pro Tag). Gesetzliche Pause: über 6 h Arbeit 30 min, über 9 h 45 min.</div>
+    <div class="hint">Farbkreis antippen zum Wechseln. Das Soll wird auf Mo–Fr verteilt (41 h = 8:12 pro Tag).</div>
     <div id="jl" style="display:flex;flex-direction:column;gap:10px">${rows()}</div>
     <button class="sbtn" id="jAdd">+ Job hinzufügen</button>
     <div class="err" id="jErr"></div>
     <div class="sheet-actions"><button class="sbtn" id="jCancel">Abbrechen</button><button class="sbtn primary" id="jSave">Speichern</button></div>`, sh=>{
       const jl=$("jl"); const redraw=()=>{ jl.innerHTML=rows(); };
-      jl.addEventListener("input",ev=>{ const i=+ev.target.closest(".jobedit").dataset.i; const k=ev.target.dataset.k; if(k==="name") draft[i].name=ev.target.value; if(k==="rate") draft[i].rate=parseFloat(String(ev.target.value).replace(",","."))||0; if(k==="target") draft[i].target=Math.min(80,parseFloat(String(ev.target.value).replace(",","."))||0); if(k==="autoPause") draft[i].autoPause=ev.target.checked; });
+      jl.addEventListener("input",ev=>{ const i=+ev.target.closest(".jobedit").dataset.i; const k=ev.target.dataset.k; if(k==="name") draft[i].name=ev.target.value; if(k==="rate") draft[i].rate=parseFloat(String(ev.target.value).replace(",","."))||0; if(k==="target") draft[i].target=Math.min(80,parseFloat(String(ev.target.value).replace(",","."))||0); });
       jl.addEventListener("click",ev=>{ const b=ev.target.closest("button"); if(!b) return; const i=+b.closest(".jobedit").dataset.i;
         if(b.dataset.act==="color"){ draft[i].color=((draft[i].color||0)+1)%COLORS; b.style.background=jc(draft[i]); }
         if(b.dataset.act==="del"){ draft.splice(i,1); redraw(); } });
-      $("jAdd").onclick=()=>{ draft.push({id:"j_"+uid(), name:"", color:draft.length%COLORS, rate:0, target:0, autoPause:true}); redraw(); jl.querySelector(".jobedit:last-child input[data-k=name]").focus(); };
+      $("jAdd").onclick=()=>{ draft.push({id:"j_"+uid(), name:"", color:draft.length%COLORS, rate:0, target:0}); redraw(); jl.querySelector(".jobedit:last-child input[data-k=name]").focus(); };
       $("jCancel").onclick=closeSheet;
       $("jSave").onclick=()=>{
         draft=draft.map(j=>({...j,name:j.name.trim()})).filter(j=>j.name);
@@ -624,6 +682,7 @@ document.addEventListener("click",ev=>{
   if(t.id==="bStart") start();
   else if(t.id==="bStop") stop();
   else if(t.id==="bPause") togglePause();
+  else if(t.id==="bNotify") askNotify();
   else if(t.dataset.job && !S.running){ S.sel=t.dataset.job; renderClock(); try{ lsSave(); }catch(e){} }
   else if(t.dataset.entry){ t.dataset.entry==="live" ? liveSheet() : entrySheet(t.dataset.entry); }
   else if(t.dataset.v){ UI.view=t.dataset.v; renderReport(); try{ localStorage.setItem(LS+".view",UI.view); }catch(e){} }
@@ -638,7 +697,7 @@ let noteT; $("note").addEventListener("input",()=>{ if(!S.running) return; clear
 
 try{ const v=localStorage.getItem(LS+".view"); if(v) UI.view=v; }catch(e){}
 setInterval(()=>{ tick(); },1000);
-setInterval(()=>{ if(S.running) renderReport(); },30000);
+setInterval(()=>{ if(S.running){ renderReport(); renderAlarms(); } },30000);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) render(); });
 initStore();
 if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
