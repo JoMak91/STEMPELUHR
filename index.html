@@ -236,9 +236,7 @@ textarea.out{width:100%;height:160px;font-family:var(--f-mono);font-size:11px;bo
 (() => {
 const COLORS = 6;
 const DEFAULT_JOBS = [
-  {id:"j_wiesenhof", name:"Wiesenhof", color:0, rate:0, target:41},
-  {id:"j_kellnern", name:"Kellnern", color:1, rate:0, target:0},
-  {id:"j_tecis", name:"tecis", color:2, rate:0, target:0}
+  {id:"j_arbeit", name:"Arbeit", color:0, rate:0, target:40}
 ];
 const S = { jobs: DEFAULT_JOBS.map(j=>({...j})), running:null, months:{}, sel: DEFAULT_JOBS[0].id };
 const UI = { view:"week", anchor:new Date() };
@@ -297,7 +295,9 @@ function saveMonth(k){ write(base()+"/m-"+k, {entries:S.months[k]||[]}); }
 
 
 function initStore(){
+  const fresh=!safeGet();
   lsLoad(); render();
+  if(fresh) setupSheet();
   try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
 }
 function safeGet(){ try{ return localStorage.getItem(LS); }catch(e){ return null; } }
@@ -533,15 +533,43 @@ function renderReport(){
 }
 
 /* ---------- sheets ---------- */
-function openSheet(html, onMount){
+function openSheet(html, onMount, locked){
   const root=$("sheetRoot");
-  root.innerHTML=`<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
-  $("scrim").addEventListener("click",ev=>{ if(ev.target.id==="scrim") closeSheet(); });
+  root.innerHTML=`<div class="scrim" id="scrim" ${locked?'data-locked="1"':""}><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  $("scrim").addEventListener("click",ev=>{ if(ev.target.id==="scrim" && !locked) closeSheet(); });
   onMount && onMount(root.querySelector(".sheet"));
   const f=root.querySelector("input,select,button"); f && f.focus({preventScroll:true});
 }
 function closeSheet(){ $("sheetRoot").innerHTML=""; }
-document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !document.querySelector("#scrim[data-locked]")) closeSheet(); });
+
+/* Ersteinrichtung für neue Nutzer: eigene Jobs und Wochensoll */
+function setupSheet(){
+  openSheet(`<h2>Willkommen</h2>
+    <div class="hint">Richte deine Stempeluhr ein. Deine Zeiten bleiben nur auf diesem Handy, niemand sonst sieht sie. Alles lässt sich später unter „Jobs“ ändern.</div>
+    <div class="field"><label for="suJob">Dein Job oder Arbeitgeber</label><input id="suJob" maxlength="30" placeholder="z. B. Firma Muster"></div>
+    <div class="row2">
+      <div class="field"><label for="suHours">Soll h/Woche</label><input id="suHours" type="number" min="0" max="80" step="0.5" inputmode="decimal" value="40"></div>
+      <div class="field"><label>Pro Tag (Mo–Fr)</label><input id="suDay" disabled value="8:00"></div>
+    </div>
+    <div class="field"><label for="suSide1">Nebenjob (optional)</label><input id="suSide1" maxlength="30" placeholder="leer lassen, wenn keiner"></div>
+    <div class="field"><label for="suSide2">Weiterer Nebenjob (optional)</label><input id="suSide2" maxlength="30"></div>
+    <div class="hint">Ohne Soll (0) gibt es keine Feierabend-Anzeige. Die Erinnerung vor 10 Stunden Arbeit gilt immer.</div>
+    <div class="err" id="suErr"></div>
+    <div class="sheet-actions"><button class="sbtn primary" id="suSave">Los geht’s</button></div>`, sh=>{
+      const upd=()=>{ const h=parseFloat(String($("suHours").value).replace(",","."))||0; $("suDay").value=fmtHM(h/5*H); };
+      $("suHours").addEventListener("input",upd); upd();
+      $("suSave").onclick=()=>{
+        const name=$("suJob").value.trim();
+        if(!name){ $("suErr").textContent="Bitte gib einen Namen für deinen Job ein."; $("suJob").focus(); return; }
+        const h=Math.min(80,Math.max(0,parseFloat(String($("suHours").value).replace(",","."))||0));
+        const jobs=[{id:"j_"+uid(), name, color:0, rate:0, target:h}];
+        [$("suSide1").value.trim(), $("suSide2").value.trim()].filter(Boolean).forEach((n,i)=>jobs.push({id:"j_"+uid(), name:n, color:i+1, rate:0, target:0}));
+        S.jobs=jobs; S.sel=jobs[0].id; S.running=null; S.months={};
+        saveSettings(); closeSheet(); render(); toast("Eingerichtet. Tippe auf Start.");
+      };
+  }, true);
+}
 
 function findEntry(id){ for(const k in S.months){ const i=S.months[k].findIndex(e=>e.id===id); if(i>=0) return {k,i,e:S.months[k][i]}; } return null; }
 
