@@ -16,6 +16,7 @@
   --bg:#eef1f3; --card:#ffffff; --ink:#18242b; --muted:#5b6b74; --line:#d5dde1;
   --accent:#0d6b6e; --accent-ink:#ffffff; --run:#c77a0a; --run-soft:#fbefd9; --danger:#b3261e; --soft:#e3eaed;
   --j0:#0d6b6e; --j1:#c77a0a; --j2:#5a4fcf; --j3:#2f8a3e; --j4:#b8436b; --j5:#3a6fb0;
+  --go:#1f8a4c; --go-soft:#dff1e6; --stop:#c8372d; --stop-soft:#f8e1de; --over:#d9640f; --ring:#dfe6ea;
   --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
@@ -24,11 +25,13 @@
   --bg:#0f1619; --card:#172126; --ink:#e3eaed; --muted:#93a4ad; --line:#2a3840;
   --accent:#3fb3b3; --accent-ink:#06191a; --run:#f0a63a; --run-soft:#33280f; --danger:#f2867d; --soft:#1f2c32;
   --j0:#3fb3b3; --j1:#f0a63a; --j2:#9a91ff; --j3:#62c374; --j4:#ec7ea3; --j5:#79a8e6;
+  --go:#3fc77a; --go-soft:#163626; --stop:#f0675c; --stop-soft:#3a1d1a; --over:#ff9a4a; --ring:#24333a;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1619; --card:#172126; --ink:#e3eaed; --muted:#93a4ad; --line:#2a3840;
   --accent:#3fb3b3; --accent-ink:#06191a; --run:#f0a63a; --run-soft:#33280f; --danger:#f2867d; --soft:#1f2c32;
   --j0:#3fb3b3; --j1:#f0a63a; --j2:#9a91ff; --j3:#62c374; --j4:#ec7ea3; --j5:#79a8e6;
+  --go:#3fc77a; --go-soft:#163626; --stop:#f0675c; --stop-soft:#3a1d1a; --over:#ff9a4a; --ring:#24333a;
   color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -44,33 +47,62 @@ button{cursor:pointer}
 .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 
 header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.today{font-size:13px;color:var(--muted);font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 header h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spacing:.02em;text-transform:uppercase;margin:0}
 .sync{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
 .sync i{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block}
 .sync.ok i{background:var(--j3)}
 
 /* clock card */
-.clock{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:16px;position:relative;overflow:hidden}
-.clock.running{border-color:var(--run)}
-.clock.running::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:var(--run)}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
+.clock{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:18px 16px 20px;display:flex;flex-direction:column;align-items:stretch;gap:16px;box-shadow:0 1px 2px rgba(10,30,40,.04),0 10px 30px -18px rgba(10,30,40,.25)}
+.state{align-self:center;display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;background:var(--soft);color:var(--muted)}
+.state i{width:8px;height:8px;border-radius:50%;background:currentColor}
+.state.in{background:var(--go-soft);color:var(--go)}
+.state.pause{background:var(--run-soft);color:var(--run)}
+.state.over{background:var(--run-soft);color:var(--over)}
+.dial{position:relative;width:min(250px,72vw);aspect-ratio:1;max-width:100%;align-self:center}
+.dial svg{width:100%;height:100%;transform:rotate(-90deg);display:block}
+.dial .track{fill:none;stroke:var(--ring);stroke-width:12}
+.dial .prog{fill:none;stroke:var(--accent);stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset .6s ease,stroke .3s}
+.dial .extra{fill:none;stroke:var(--over);stroke-width:12;stroke-linecap:round}
+.dial .extra.zero,.dial .prog.zero{display:none}
+.dial.paused .prog{stroke:var(--run);opacity:.55}
+.dial-in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;padding:18%}
+.dial-in .lbl{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.dial-in .sub{font-size:13px;color:var(--muted);font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.dial-in .sub b{color:var(--ink)}
+.dial.over .dial-in .sub b{color:var(--over)}
+.punch{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;justify-items:center}
+.pbtn{display:flex;flex-direction:column;align-items:center;gap:8px;border:0;background:transparent;padding:0;font-weight:600;font-size:14px;color:var(--ink)}
+.pbtn .c{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;transition:transform .12s ease,box-shadow .2s,opacity .2s}
+.pbtn .c svg{width:30px;height:30px}
+.pbtn.kommen .c{background:var(--go);color:#fff;box-shadow:0 8px 20px -8px var(--go)}
+.pbtn.pause .c{background:var(--run);color:#fff;box-shadow:0 8px 20px -8px var(--run)}
+.pbtn.gehen .c{background:var(--stop);color:#fff;box-shadow:0 8px 20px -8px var(--stop)}
+.pbtn:active:not(:disabled) .c{transform:scale(.93)}
+.pbtn:disabled{cursor:default;color:var(--muted)}
+.pbtn:disabled .c{background:var(--soft);color:var(--muted);box-shadow:none;opacity:.7}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--bg);border-radius:12px;padding:8px 10px;text-align:center;min-width:0}
+.stat .k{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--f-mono);font-weight:600;font-size:16px;font-variant-numeric:tabular-nums}
+.stat .v.overc{color:var(--over)} .stat .v.okc2{color:var(--go)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 13px;display:flex;align-items:center;gap:7px;font-weight:500;font-size:14px}
 .chip .dot{width:9px;height:9px;border-radius:50%}
 .chip[aria-pressed="true"]{background:var(--soft);border-color:var(--ink)}
 .chip:disabled{opacity:.45;cursor:default}
-.face{display:flex;flex-direction:column;align-items:center;gap:4px;padding-block:6px}
-.timer{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:clamp(46px,15vw,72px);letter-spacing:-.02em;line-height:1}
-.timer .s{color:var(--muted);font-size:.5em;margin-left:2px}
+.timer{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:clamp(40px,12vw,54px);letter-spacing:-.03em;line-height:1}
+.timer .s{color:var(--muted);font-size:.42em;margin-left:2px}
 .status{font-size:13px;color:var(--muted);text-align:center;min-height:1.4em}
 .status b{color:var(--ink);font-weight:600}
 .paused .timer{color:var(--muted)}
-.soll-line{font-size:13px;text-align:center;background:var(--soft);border-radius:8px;padding:7px 12px;margin-top:6px;line-height:1.5}
 .okc{color:var(--j3);font-weight:600}
 .alarms{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .alarms a,.alarms button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:500;text-decoration:none}
 .alarms .num{font-weight:600}
 .alarms .bell{border-color:var(--accent);color:var(--accent)}
-.warnbar{background:var(--run-soft);border:1px solid var(--run);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px;text-align:center}
+.warnbar{background:var(--run-soft);border:1px solid var(--over);color:var(--ink);border-radius:14px;padding:10px 12px;font-size:14px;text-align:center}
 .hintc{color:var(--muted);font-size:12px}
 .soll{display:flex;flex-direction:column;gap:8px}
 .sollrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -86,20 +118,15 @@ header h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spa
 .check{display:flex;align-items:center;gap:8px;font-size:14px}
 .check input{width:20px;height:20px;accent-color:var(--accent)}
 .label-up{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.actions{display:grid;grid-template-columns:1fr;gap:10px}
-.actions.two{grid-template-columns:1fr 1fr}
-.btn-big{border:0;border-radius:12px;padding:18px 12px;font-family:var(--f-display);font-weight:700;font-size:24px;letter-spacing:.08em;text-transform:uppercase}
-.btn-start{background:var(--accent);color:var(--accent-ink)}
-.btn-stop{background:var(--run);color:#1b1205}
-.btn-pause{background:var(--soft);color:var(--ink);border:1px solid var(--line)}
-.note{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;font-size:14px}
+
+.note{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 12px;font-size:14px}
 
 /* toolbar */
 .tools{display:flex;gap:8px;flex-wrap:wrap}
-.tbtn{flex:1 1 auto;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 12px;font-weight:500;font-size:14px;white-space:nowrap}
+.tbtn{flex:1 1 auto;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:10px 12px;font-weight:500;font-size:14px;white-space:nowrap}
 
 /* report */
-.report{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:16px}
+.report{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:16px;display:flex;flex-direction:column;gap:16px}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--soft);border-radius:10px;padding:3px}
 .seg button{border:0;background:transparent;border-radius:8px;padding:8px;font-weight:600;font-size:14px;color:var(--muted)}
 .seg button[aria-selected="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
@@ -172,7 +199,10 @@ textarea.out{width:100%;height:160px;font-family:var(--f-mono);font-size:11px;bo
   @keyframes up{from{transform:translateY(30px);opacity:.4}to{transform:none;opacity:1}}
   .clock.running:not(.paused) .colon{animation:blink 1s steps(1) infinite}
   @keyframes blink{50%{opacity:.25}}
+  .state.in i{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.3}}
 }
+@media (max-width:360px){.pbtn .c{width:64px;height:64px}.stat .v{font-size:14px}}
 @media (max-width:380px){.jobedit{grid-template-columns:auto 1fr 70px auto}.row3{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -182,23 +212,34 @@ textarea.out{width:100%;height:160px;font-family:var(--f-mono);font-size:11px;bo
 <div class="wrap">
   <header>
     <h1>Stempeluhr</h1>
-    
+    <div class="today" id="today"></div>
   </header>
 
   <section class="clock" id="clock" aria-label="Zeiterfassung">
-    <div>
-      <div class="label-up" style="margin-bottom:8px">Job</div>
-      <div class="chips" id="chips"></div>
+    <div class="chips" id="chips" aria-label="Job"></div>
+    <div class="state" id="state"><i></i><span>Nicht eingestempelt</span></div>
+    <div class="dial" id="dial">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="track" cx="60" cy="60" r="52"></circle>
+        <circle class="prog" id="ringProg" cx="60" cy="60" r="52" stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
+        <circle class="extra" id="ringExtra" cx="60" cy="60" r="52" stroke-dasharray="0 326.73"></circle>
+      </svg>
+      <div class="dial-in">
+        <div class="lbl" id="dialLbl">Arbeitszeit</div>
+        <div class="timer" id="timer" aria-live="off">0<span class="colon">:</span>00<span class="s">:00</span></div>
+        <div class="sub" id="dialSub"></div>
+      </div>
     </div>
-    <div class="face">
-      <div class="timer" id="timer" aria-live="off">0<span class="colon">:</span>00<span class="s">:00</span></div>
-      <div class="status" id="status">Bereit zum Einstempeln</div>
-      <div class="soll-line" id="sollLine" hidden></div>
+    <div class="punch">
+      <button class="pbtn kommen" id="bStart"><span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></span>Kommen</button>
+      <button class="pbtn pause" id="bPause"><span class="c" id="pauseIcon"></span><span id="pauseLbl">Pause</span></button>
+      <button class="pbtn gehen" id="bStop"><span class="c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>Gehen</button>
     </div>
+    <div class="stats" id="stats" hidden></div>
+    <div class="status" id="status"></div>
     <div class="warnbar" id="warnbar" hidden></div>
     <div class="alarms" id="alarms" hidden></div>
     <input class="note" id="note" placeholder="Notiz (optional), z. B. Inventur, Hochzeit Saal 2" maxlength="140">
-    <div class="actions" id="actions"></div>
   </section>
 
   <div class="tools">
@@ -305,7 +346,7 @@ function safeGet(){ try{ return localStorage.getItem(LS); }catch(e){ return null
 /* ---------- clock actions ---------- */
 function start(){
   S.running={job:S.sel, start:Date.now(), pauses:[], note:$("note").value.trim()};
-  saveSettings(); render(); toast("Eingestempelt");
+  saveSettings(); render(); toast(`Gekommen um ${hm(S.running.start)}`);
   askNotify();
 }
 function togglePause(){
@@ -323,7 +364,7 @@ function stop(){
   (S.months[k] ||= []).push(e);
   S.running=null; $("note").value="";
   saveMonth(k); saveSettings(); render();
-  toast(`Ausgestempelt · ${fmtHM(net(e))} h`);
+  toast(`Gegangen um ${hm(e.end)} · ${fmtHM(net(e))} h gearbeitet`);
 }
 
 /* ---------- data queries ---------- */
@@ -347,53 +388,55 @@ function range(){
 /* ---------- render ---------- */
 function render(){ renderClock(); renderReport(); }
 
+const CIRC=2*Math.PI*52;
+const ICON_PAUSE='<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>';
+const ICON_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>';
+const isPaused = r => !!(r && r.pauses.length && r.pauses[r.pauses.length-1].e==null);
 function renderClock(){
-  const r=S.running, now=Date.now();
-  const paused = r && r.pauses.length && r.pauses[r.pauses.length-1].e==null;
+  const r=S.running, paused=isPaused(r);
   $("clock").classList.toggle("running",!!r);
-  $("clock").classList.toggle("paused",!!paused);
+  $("clock").classList.toggle("paused",paused);
   $("chips").innerHTML = S.jobs.map(j=>`<button class="chip" data-job="${esc(j.id)}" aria-pressed="${(r?r.job:S.sel)===j.id}" ${r?"disabled":""}><span class="dot" style="background:${jc(j)}"></span>${esc(j.name)}</button>`).join("");
   if(r && document.activeElement!==$("note") && !$("note").value) $("note").value=r.note||"";
-  const a=$("actions");
-  if(!r){ a.className="actions"; a.innerHTML=`<button class="btn-big btn-start" id="bStart">Start</button>`; }
-  else { a.className="actions two"; a.innerHTML=`<button class="btn-big btn-pause" id="bPause">${paused?"Weiter":"Pause"}</button><button class="btn-big btn-stop" id="bStop">Stopp</button>`; }
+  $("bStart").disabled=!!r; $("bStop").disabled=!r; $("bPause").disabled=!r;
+  $("pauseIcon").innerHTML = paused?ICON_PLAY:ICON_PAUSE; $("pauseLbl").textContent = paused?"Weiter":"Pause";
   tick(); renderAlarms();
 }
 function tick(){
-  const r=S.running, now=Date.now();
-  let ms=0, st="Bereit zum Einstempeln";
-  if(r){
-    ms=net(liveEntry());
-    const p=pauseMs(r.pauses,now);
-    const paused=r.pauses.length && r.pauses[r.pauses.length-1].e==null;
-    st=`${paused?"Pause seit "+hm(r.pauses[r.pauses.length-1].s)+" · ":""}<b>${esc(jobById(r.job).name)}</b> seit ${hm(r.start)}${new Date(r.start).toDateString()!==new Date().toDateString()?" ("+WD[new Date(r.start).getDay()]+")":""}${p>=60000?` · Pause ${fmtHM(p)}`:""}`;
-  } else {
-    const t=entriesIn(sod(new Date()), addDays(sod(new Date()),1)).reduce((s,e)=>s+net(e),0);
-    if(t>0) st=`Heute bisher <b>${fmtHM(t)} h</b>`;
-  }
+  const r=S.running, now=Date.now(), today=sod(new Date()), paused=isPaused(r);
+  const d=new Date(); $("today").textContent=`${WD[d.getDay()]} ${d.getDate()}.${pad(d.getMonth()+1)}. · ${hm(now)}`;
+  const j=jobById(r?r.job:S.sel), T=isWorkday(today)?dailyTarget(j):0;
+  const dayNet=todayNet(j.id);                     // heute für diesen Job, inkl. laufender Zeit
+  const ms = r ? net(liveEntry()) : dayNet;
   const s=Math.floor(Math.max(0,ms)/1000);
   $("timer").innerHTML=`${Math.floor(s/3600)}<span class="colon">:</span>${pad(Math.floor(s/60)%60)}<span class="s">:${pad(s%60)}</span>`;
-  $("status").innerHTML=st;
-  sollLine();
+  // Ring: Fortschritt zum Tagessoll (ohne Soll: zu 10 h)
+  const goal=T||MAXDAY, over=T>0 && dayNet>T;
+  const frac=Math.min(1,dayNet/goal), extra=over?Math.min(1,(dayNet-T)/goal):0;
+  $("ringProg").style.strokeDashoffset = CIRC*(1-frac); $("ringProg").classList.toggle("zero", frac<=0.002);
+  $("ringExtra").setAttribute("stroke-dasharray", `${extra*CIRC} ${CIRC}`); $("ringExtra").classList.toggle("zero", extra<=0);
+  const dial=$("dial"); dial.classList.toggle("over",over); dial.classList.toggle("paused",paused);
+  $("dialLbl").textContent = !r ? "Heute" : paused ? "Pause" : over ? "Überzeit" : "Arbeitszeit";
+  $("dialSub").innerHTML = over ? `<b>+${fmtHM(dayNet-T)}</b> über ${fmtHM(T)}` : T ? `von ${fmtHM(T)}` : r ? "" : "";
+  // Status-Pille
+  const st=$("state"); st.className="state"+(r?(paused?" pause":over?" over":" in"):"");
+  st.querySelector("span").textContent = !r ? "Nicht eingestempelt" :
+    paused ? `Pause seit ${hm(r.pauses[r.pauses.length-1].s)}` :
+    `${over?"Überzeit · ":""}${jobById(r.job).name} seit ${hm(r.start)}${new Date(r.start).toDateString()!==d.toDateString()?" ("+WD[new Date(r.start).getDay()]+")":""}`;
+  // Kennzahlen
+  const stats=$("stats");
+  if(T){
+    const rest=T-dayNet;
+    const cells=[["Soll heute",fmtHM(T),""], rest>0?["Noch",fmtHM(rest),""]:["Überzeit","+"+fmtHM(-rest),"overc"],
+      r && !paused && rest>0 ? ["Gehen ca.",hm(now+rest),""] : ["Pause",fmtHM(r?pauseMs(r.pauses,now):entriesIn(today,addDays(today,1)).reduce((a,e)=>a+ePause(e),0)),""]];
+    stats.innerHTML=cells.map(([k,v,c])=>`<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`).join(""); stats.hidden=false;
+  } else stats.hidden=true;
+  // kleine Zusatzzeile
+  let line="";
+  if(r){ const p=pauseMs(r.pauses,now); if(p>=MIN && !T) line=`Pause heute ${fmtHM(p)}`; }
+  else { const t=todayNet(null); if(t>0 && t!==dayNet) line=`Heute alle Jobs: <b>${fmtHM(t)} h</b>`; }
+  $("status").innerHTML=line; $("status").hidden=!line;
   checkReminders();
-}
-function sollLine(){
-  const el=$("sollLine"), r=S.running, j=jobById(r?r.job:S.sel), today=sod(new Date());
-  const T=dailyTarget(j);
-  if(!T || !isWorkday(today)){ el.hidden=true; return; }
-  const done=entriesIn(today,addDays(today,1)).filter(e=>e.job===j.id).reduce((s,e)=>s+net(e),0);
-  const live=r?liveEntry():null, liveNet=live?net(live):0;
-  const rest=T-done-liveNet;
-  let txt=`Soll heute <b class="num">${fmtHM(T)}</b> · `;
-  if(rest<=0) txt+=`<span class="okc">Soll erfüllt <b class="num">${signed(-rest)}</b></span>`;
-  else {
-    txt+=`noch <b class="num">${fmtHM(rest)}</b>`;
-    const paused=r && r.pauses.length && r.pauses[r.pauses.length-1].e==null;
-    if(r && !paused){
-      txt+=` · Feierabend ca. <b class="num">${hm(Date.now()+rest)}</b>`;
-    }
-  }
-  el.innerHTML=txt; el.hidden=false;
 }
 
 /* ---------- Erinnerungen ---------- */
@@ -419,7 +462,7 @@ function askNotify(){
   try{ Notification.requestPermission().then(()=>renderAlarms()); }catch(e){}
 }
 async function notify(title, body, tag){
-  toast(title); showWarn(`<b>${esc(title)}</b><br>${esc(body)}`);
+  showWarn(`<b>${esc(title)}</b><br>${esc(body)}`);
   try{ navigator.vibrate && navigator.vibrate([250,120,250]); }catch(e){}
   if(notifyPerm()!=="granted") return;
   const opt={body, tag, icon:"icon-192-1.png", badge:"icon-192-1.png", vibrate:[250,120,250], renotify:true, requireInteraction:true};
@@ -438,6 +481,10 @@ function checkReminders(){
     else if(soll<=LEAD && !paused){ r.notified.soll=true; changed=true;
       notify(`Noch ${Math.ceil(soll/MIN)} Minuten bis ${fmtHM(T)} h`, `Um ${hm(Date.now()+soll)} hast du dein Tagessoll erreicht.`, "soll"); }
   }
+  if(soll!=null && soll<=0 && !r.notified.over){ r.notified.over=true; changed=true;
+    const o=-soll;
+    notify(o<5*MIN ? `Deine Arbeitszeit von ${fmtHM(T)} h ist erreicht` : `Du bist schon ${fmtHM(o)} h drüber`,
+      o<5*MIN ? `Ab jetzt zählt alles als Überzeit. Denk ans Gehen-Stempeln.` : `Deine tägliche Arbeitszeit von ${fmtHM(T)} h ist seit ${hm(Date.now()-o)} überschritten.`, "over"); }
   if(!r.notified.max){
     if(max<=0){ r.notified.max=true; changed=true; }
     else if(max<=LEAD && !paused){ r.notified.max=true; changed=true;
