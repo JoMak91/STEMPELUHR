@@ -492,17 +492,10 @@ function checkReminders(){
   }
   if(changed) saveSettings();
 }
-// Android-Wecker: öffnet die Uhr-App mit vorausgefüllter Weckzeit
-function alarmHref(time, msg){
-  const d=new Date(time);
-  return `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR=${d.getHours()};i.android.intent.extra.alarm.MINUTES=${d.getMinutes()};S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent(msg)};B.android.intent.extra.alarm.SKIP_UI=true;end`;
-}
 function renderAlarms(){
   const el=$("alarms"), r=S.running;
   if(!r){ el.hidden=true; $("warnbar").hidden=true; return; }
   const {soll,max,T}=remaining(); const now=Date.now(); const out=[];
-  if(soll!=null && soll>LEAD){ const t=now+soll-LEAD; out.push(`<a href="${alarmHref(t,"Stempeluhr: noch 15 Min bis "+fmtHM(T)+" h")}">⏰ Wecker ${fmtHM(T)} h <span class="num">${hm(t)}</span></a>`); }
-  if(max>LEAD){ const t=now+max-LEAD; out.push(`<a href="${alarmHref(t,"Stempeluhr: noch 15 Min bis 10 Stunden")}">⏰ Wecker 10 h <span class="num">${hm(t)}</span></a>`); }
   if(notifyPerm()==="default") out.push(`<button class="bell" id="bNotify">🔔 Benachrichtigungen erlauben</button>`);
   el.innerHTML=out.join(""); el.hidden=!out.length;
 }
