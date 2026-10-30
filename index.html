@@ -168,6 +168,15 @@ header h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spa
 .entry .d{font-family:var(--f-mono);font-weight:600;font-variant-numeric:tabular-nums}
 .entry .meta{grid-column:2/-1;font-size:12px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
 .entry.live{background:var(--run-soft);border-radius:8px;padding-inline:8px}
+.abspill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--ink);background:var(--soft)}
+.abspill i{width:8px;height:8px;border-radius:50%}
+.entry.absrow{background:var(--soft);border-radius:10px;padding-inline:10px;border-top:0}
+.abschips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.abschips button{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:12px;font-weight:600;font-size:14px;text-align:left}
+.abschips button i{width:12px;height:12px;border-radius:50%;flex:none}
+.abschips button[aria-pressed="true"]{border-color:var(--ink);background:var(--card);box-shadow:0 0 0 1px var(--ink)}
+.absum{display:flex;flex-wrap:wrap;gap:6px}
+.chart .col i.absbar{opacity:.35;border-radius:3px 3px 0 0}
 .empty{color:var(--muted);text-align:center;padding:22px 8px;border:1px dashed var(--line);border-radius:10px;font-size:14px}
 
 /* sheet */
@@ -245,6 +254,7 @@ textarea.out{width:100%;height:160px;font-family:var(--f-mono);font-size:11px;bo
   <div class="tools">
     <button class="tbtn" id="btnAdd">+ Nachtragen</button>
     <button class="tbtn" id="btnExport">Export CSV</button>
+    <button class="tbtn" id="btnAbs">Abwesenheit</button>
     <button class="tbtn" id="btnJobs">Jobs</button>
   </div>
 
@@ -279,7 +289,7 @@ const COLORS = 6;
 const DEFAULT_JOBS = [
   {id:"j_arbeit", name:"Arbeit", color:0, rate:0, target:40}
 ];
-const S = { jobs: DEFAULT_JOBS.map(j=>({...j})), running:null, months:{}, sel: DEFAULT_JOBS[0].id };
+const S = { jobs: DEFAULT_JOBS.map(j=>({...j})), running:null, months:{}, abs:{}, sel: DEFAULT_JOBS[0].id };
 const UI = { view:"week", anchor:new Date() };
 
 /* ---------- helpers ---------- */
@@ -308,7 +318,18 @@ const ePause = e => e.pause||0;
 const net = e => e.end - e.start - ePause(e);
 const dailyTarget = j => (j.target||0)/5*H;
 const isWorkday = d => d.getDay()>=1 && d.getDay()<=5;
-function targetIn(j,a,b,untilToday){ const lim=untilToday?addDays(sod(new Date()),1):b; let n=0; for(let d=new Date(a); d<b && d<lim; d=addDays(d,1)) if(isWorkday(d)) n++; return n*dailyTarget(j); }
+/* Abwesenheiten: Urlaub, Krank und Feiertag setzen das Tagessoll auf 0 (Saldo bleibt gleich),
+   Stundenabbau lässt das Soll stehen, ohne Arbeitszeit geht es also vom Stundenkonto ab. */
+const ABS={
+  urlaub:{l:"Urlaub", c:"var(--j5)", zero:true},
+  abbau:{l:"Stundenabbau", c:"var(--j2)", zero:false},
+  krank:{l:"Krank", c:"var(--j4)", zero:true},
+  feiertag:{l:"Feiertag", c:"var(--j3)", zero:true}
+};
+const absOn = d => S.abs[dayKey(d)];
+const sollDay = (j,d) => isWorkday(d) && !(ABS[absOn(d)]?.zero) ? dailyTarget(j) : 0;
+function targetIn(j,a,b,untilToday){ const lim=untilToday?addDays(sod(new Date()),1):b; let t=0; for(let d=new Date(a); d<b && d<lim; d=addDays(d,1)) t+=sollDay(j,d); return t; }
+function absIn(a,b){ return Object.keys(S.abs).filter(k=>k>=dayKey(a) && k<dayKey(b)).sort(); }
 const signed = ms => (ms<0?"−":"+")+fmtHM(Math.abs(ms));
 function normalizeJobs(){ S.jobs=S.jobs.map(j=>({...j,
   target: j.target!==undefined ? j.target : (j.id==="j_wiesenhof"?41:0) })); }
@@ -319,8 +340,8 @@ function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clea
 /* ---------- storage: synced db, fallback local ---------- */
 const store = { mode:"none", db:null, uid:null, pend:{}, q:{} };
 const LS = "stempeluhr.v1";
-function lsLoad(){ try{ const raw=localStorage.getItem(LS); if(!raw) return; const d=JSON.parse(raw); if(d.jobs?.length) S.jobs=d.jobs; S.running=d.running||null; S.months=d.months||{}; if(d.sel) S.sel=d.sel; normalizeJobs(); }catch(e){} }
-function lsSave(){ try{ localStorage.setItem(LS, JSON.stringify({jobs:S.jobs,running:S.running,months:S.months,sel:S.sel})); }catch(e){} }
+function lsLoad(){ try{ const raw=localStorage.getItem(LS); if(!raw) return; const d=JSON.parse(raw); if(d.jobs?.length) S.jobs=d.jobs; S.running=d.running||null; S.months=d.months||{}; S.abs=d.abs||{}; if(d.sel) S.sel=d.sel; normalizeJobs(); }catch(e){} }
+function lsSave(){ try{ localStorage.setItem(LS, JSON.stringify({jobs:S.jobs,running:S.running,months:S.months,abs:S.abs,sel:S.sel})); }catch(e){} }
 function base(){ return "data/users/"+store.uid; }
 function write(path, data){
   if(store.mode!=="db"){ lsSave(); return; }
@@ -331,7 +352,7 @@ function write(path, data){
   }).finally(()=>{ store.pend[path]--; });
   lsSave();
 }
-function saveSettings(){ write(base()+"/settings", {jobs:S.jobs, running:S.running, sel:S.sel}); }
+function saveSettings(){ write(base()+"/settings", {jobs:S.jobs, running:S.running, abs:S.abs, sel:S.sel}); }
 function saveMonth(k){ write(base()+"/m-"+k, {entries:S.months[k]||[]}); }
 
 
@@ -405,7 +426,7 @@ function renderClock(){
 function tick(){
   const r=S.running, now=Date.now(), today=sod(new Date()), paused=isPaused(r);
   const d=new Date(); $("today").textContent=`${WD[d.getDay()]} ${d.getDate()}.${pad(d.getMonth()+1)}. · ${hm(now)}`;
-  const j=jobById(r?r.job:S.sel), T=isWorkday(today)?dailyTarget(j):0;
+  const j=jobById(r?r.job:S.sel), T=sollDay(j,today), absT=absOn(today);
   const dayNet=todayNet(j.id);                     // heute für diesen Job, inkl. laufender Zeit
   const ms = r ? net(liveEntry()) : dayNet;
   const s=Math.floor(Math.max(0,ms)/1000);
@@ -420,7 +441,7 @@ function tick(){
   $("dialSub").innerHTML = over ? `<b>+${fmtHM(dayNet-T)}</b> über ${fmtHM(T)}` : T ? `von ${fmtHM(T)}` : r ? "" : "";
   // Status-Pille
   const st=$("state"); st.className="state"+(r?(paused?" pause":over?" over":" in"):"");
-  st.querySelector("span").textContent = !r ? "Nicht eingestempelt" :
+  st.querySelector("span").textContent = !r ? (absT ? `Heute: ${ABS[absT].l}` : "Nicht eingestempelt") :
     paused ? `Pause seit ${hm(r.pauses[r.pauses.length-1].s)}` :
     `${over?"Überzeit · ":""}${jobById(r.job).name} seit ${hm(r.start)}${new Date(r.start).toDateString()!==d.toDateString()?" ("+WD[new Date(r.start).getDay()]+")":""}`;
   // Kennzahlen
@@ -452,7 +473,7 @@ function remaining(){
   const r=S.running; if(!r) return {};
   const j=jobById(r.job), T=dailyTarget(j);
   return {
-    soll: T && isWorkday(new Date()) ? T-todayNet(j.id) : null,
+    soll: sollDay(j,new Date()) ? T-todayNet(j.id) : null,
     max: MAXDAY-todayNet(null), job:j, T
   };
 }
@@ -539,7 +560,9 @@ function renderReport(){
       <div><div class="k">Soll</div><div class="v">${fmtHM(soll)}</div></div>
       <div><div class="k">Ist</div><div class="v">${fmtHM(ist)}</div></div>
       <div><div class="k">${lbl}</div><div class="v ${saldo>=0?"pos":"neg"}">${sollBis||past||containsToday?signed(saldo):"–"}</div></div></div>`;
-  }).join("") + (tj.length && UI.view==="month" ? `<div class="hint">Soll ohne Feiertage, Urlaub und Krankheit gerechnet.</div>` : "");
+  }).join("") + (()=>{ const ak=absIn(a,b); if(!ak.length) return "";
+      const cnt={}; ak.forEach(k=>cnt[S.abs[k]]=(cnt[S.abs[k]]||0)+1);
+      return `<div class="absum">${Object.keys(ABS).filter(t=>cnt[t]).map(t=>`<span class="abspill"><i style="background:${ABS[t].c}"></i>${ABS[t].l} ${cnt[t]} ${cnt[t]===1?"Tag":"Tage"}</span>`).join("")}</div>`; })();
 
   // chart (week / month)
   const ch=$("chart");
@@ -548,25 +571,28 @@ function renderReport(){
     ch.hidden=false;
     const days=[]; for(let d=new Date(a); d<b; d=addDays(d,1)) days.push(d);
     const byDay=days.map(d=>{ const k=dayKey(d); const m={}; for(const e of list) if(dayKey(new Date(e.start))===k) m[e.job]=(m[e.job]||0)+net(e); return m; });
-    const dmax=Math.max(...byDay.map(m=>Object.values(m).reduce((s,v)=>s+v,0)));
+    const absH=(tj[0]?dailyTarget(tj[0]):8*H);
+    const dmax=Math.max(...byDay.map((m,i)=>Math.max(Object.values(m).reduce((s,v)=>s+v,0), absOn(days[i])?absH:0)));
     const hrs=Math.max(4, Math.ceil(dmax/3600000/2)*2);
     const lines=[]; for(let h=2; h<=hrs; h+=(hrs>8?4:2)) lines.push(h);
     ch.innerHTML = `<div class="plot"><div class="grid">${lines.map(h=>`<div style="bottom:${h/hrs*100}%"><span>${h}h</span></div>`).join("")}</div>${
-      byDay.map((m,i)=>`<div class="col ${+days[i]===+today?"today":""}" title="${dayKey(days[i])}">${S.jobs.concat(Object.keys(m).filter(id=>!S.jobs.find(j=>j.id===id)).map(jobById)).filter(j=>m[j.id]).map(j=>`<i style="height:${m[j.id]/3600000/hrs*100}%;background:${jc(j)}"></i>`).join("")}</div>`).join("")
+      byDay.map((m,i)=>`<div class="col ${+days[i]===+today?"today":""}" title="${dayKey(days[i])}">${S.jobs.concat(Object.keys(m).filter(id=>!S.jobs.find(j=>j.id===id)).map(jobById)).filter(j=>m[j.id]).map(j=>`<i style="height:${m[j.id]/3600000/hrs*100}%;background:${jc(j)}"></i>`).join("")}${!Object.keys(m).length && absOn(days[i]) ? `<i class="absbar" style="height:${absH/H/hrs*100}%;background:${ABS[absOn(days[i])].c}"></i>` : ""}</div>`).join("")
     }</div><div class="xl">${days.map((d,i)=>`<span>${UI.view==="week"?WD[d.getDay()]:(d.getDate()===1||d.getDate()%5===0?d.getDate():"")}</span>`).join("")}</div>`;
   }
 
   // entries grouped by day, newest first
   const groups={}; for(const e of list){ const k=dayKey(new Date(e.start)); (groups[k] ||= []).push(e); }
-  const keys=Object.keys(groups).sort().reverse();
+  const keys=[...new Set([...Object.keys(groups), ...absIn(a,b)])].sort().reverse();
   if(!keys.length){
-    $("days").innerHTML=`<div class="empty">Noch keine Zeiten in diesem Zeitraum.<br>Tippe oben auf <b>Start</b> oder trage eine Zeit mit <b>+ Nachtragen</b> nach.</div>`;
+    $("days").innerHTML=`<div class="empty">Noch keine Zeiten in diesem Zeitraum.<br>Tippe oben auf <b>Kommen</b>, trage eine Zeit mit <b>+ Nachtragen</b> nach oder lege eine <b>Abwesenheit</b> an.</div>`;
     return;
   }
   $("days").innerHTML = keys.map(k=>{
-    const d=new Date(groups[k][0].start); const sum=groups[k].reduce((s,e)=>s+net(e),0);
-    return `<div class="day"><h3><span>${WD[d.getDay()]}, ${d.getDate()}. ${MON[d.getMonth()].slice(0,3)}.</span><span class="num">${fmtHM(sum)} h</span></h3>${
-      groups[k].map(e=>{ const j=jobById(e.job); const ep=ePause(e); const meta=[ep>=60000?`Pause ${fmtHM(ep)}`:"", e.live?"läuft gerade":"", e.note?esc(e.note):""].filter(Boolean).join(" · ");
+    const [Y,M,D]=k.split("-").map(Number), d=new Date(Y,M-1,D); const g=groups[k]||[]; const sum=g.reduce((s,e)=>s+net(e),0);
+    const at=S.abs[k];
+    const absRow = at ? `<button class="entry absrow" data-abs="${k}"><span class="t"><span class="abspill" style="background:transparent;padding:0"><i style="background:${ABS[at].c}"></i></span></span><span class="j">${ABS[at].l}</span><span class="d">${ABS[at].zero?"Soll 0:00":"−"+fmtHM(tj[0]?dailyTarget(tj[0]):0)}</span><span class="meta">${ABS[at].zero?"Zählt nicht als Fehlzeit":"Geht vom Stundenkonto ab"} · zum Ändern antippen</span></button>` : "";
+    return `<div class="day"><h3><span>${WD[d.getDay()]}, ${d.getDate()}. ${MON[d.getMonth()].slice(0,3)}.</span><span class="num">${g.length?fmtHM(sum)+" h":ABS[at].l}</span></h3>${absRow}${
+      g.map(e=>{ const j=jobById(e.job); const ep=ePause(e); const meta=[ep>=60000?`Pause ${fmtHM(ep)}`:"", e.live?"läuft gerade":"", e.note?esc(e.note):""].filter(Boolean).join(" · ");
         return `<button class="entry ${e.live?"live":""}" data-entry="${esc(e.id)}"><span class="t">${hm(e.start)}–${e.live?"jetzt":hm(e.end)}</span><span class="j"><span class="dot" style="display:inline-block;margin-right:6px;background:${jc(j)}"></span>${esc(j.name)}</span><span class="d">${fmtHM(net(e))}</span>${meta?`<span class="meta">${meta}</span>`:""}</button>`; }).join("")
     }</div>`;
   }).join("");
@@ -605,7 +631,7 @@ function setupSheet(){
         const h=Math.min(80,Math.max(0,parseFloat(String($("suHours").value).replace(",","."))||0));
         const jobs=[{id:"j_"+uid(), name, color:0, rate:0, target:h}];
         [$("suSide1").value.trim(), $("suSide2").value.trim()].filter(Boolean).forEach((n,i)=>jobs.push({id:"j_"+uid(), name:n, color:i+1, rate:0, target:0}));
-        S.jobs=jobs; S.sel=jobs[0].id; S.running=null; S.months={};
+        S.jobs=jobs; S.sel=jobs[0].id; S.running=null; S.months={}; S.abs={};
         saveSettings(); closeSheet(); render(); toast("Eingerichtet. Tippe auf Start.");
       };
   }, true);
@@ -720,21 +746,65 @@ function jobsSheet(){
   });
 }
 
-function buildCsv(list){
+function absSheet(key){
+  const today=dayKey(UI.view==="day"?UI.anchor:new Date());
+  const cur = key ? S.abs[key] : null;
+  let type = cur || "urlaub";
+  openSheet(`<h2>${cur?"Abwesenheit ändern":"Abwesenheit eintragen"}</h2>
+    <div class="abschips" id="aTypes">${Object.entries(ABS).map(([t,o])=>`<button data-t="${t}" aria-pressed="${t===type}"><i style="background:${o.c}"></i>${o.l}</button>`).join("")}</div>
+    <div class="row2">
+      <div class="field"><label for="aFrom">Von</label><input type="date" id="aFrom" value="${key||today}"></div>
+      <div class="field"><label for="aTo">Bis</label><input type="date" id="aTo" value="${key||today}"></div>
+    </div>
+    <div class="hint" id="aInfo"></div>
+    <div class="err" id="aErr"></div>
+    <div class="sheet-actions">
+      ${cur?`<button class="sbtn danger" id="aDel">Entfernen</button>`:""}
+      <button class="sbtn" id="aCancel">Abbrechen</button>
+      <button class="sbtn primary" id="aSave">Speichern</button>
+    </div>`, sh=>{
+      const days=()=>{ const f=$("aFrom").value, t=$("aTo").value; if(!f||!t) return null;
+        const [y1,m1,d1]=f.split("-").map(Number), [y2,m2,d2]=t.split("-").map(Number);
+        let a=new Date(y1,m1-1,d1), b=new Date(y2,m2-1,d2); if(b<a) return [];
+        const out=[]; for(let d=a; d<=b && out.length<400; d=addDays(d,1)) if(isWorkday(d)) out.push(dayKey(d)); return out; };
+      const info=()=>{ const ds=days(); const o=ABS[type];
+        $("aInfo").textContent = !ds ? "" : !ds.length ? "Im Zeitraum liegt kein Arbeitstag (Mo–Fr)." :
+          `${ds.length} ${ds.length===1?"Arbeitstag":"Arbeitstage"}. ${o.zero?"Das Soll für diese Tage ist 0, dein Saldo bleibt unverändert.":"Das Soll bleibt, die Stunden gehen von deinem Stundenkonto ab."}`; };
+      $("aTypes").addEventListener("click",ev=>{ const b=ev.target.closest("button"); if(!b) return; type=b.dataset.t;
+        sh.querySelectorAll("#aTypes button").forEach(x=>x.setAttribute("aria-pressed", x===b)); info(); });
+      $("aFrom").addEventListener("change",()=>{ if($("aTo").value<$("aFrom").value) $("aTo").value=$("aFrom").value; info(); });
+      $("aTo").addEventListener("change",info); info();
+      $("aCancel").onclick=closeSheet;
+      $("aSave").onclick=()=>{ const ds=days();
+        if(!ds){ $("aErr").textContent="Bitte Von und Bis ausfüllen."; return; }
+        if(!ds.length){ $("aErr").textContent="Im Zeitraum liegt kein Arbeitstag. Wochenenden werden übersprungen."; return; }
+        if(key && !ds.includes(key)) delete S.abs[key];
+        ds.forEach(k=>S.abs[k]=type); saveSettings(); closeSheet(); render();
+        toast(`${ABS[type].l} eingetragen · ${ds.length} ${ds.length===1?"Tag":"Tage"}`); };
+      if(cur) $("aDel").onclick=ev=>{ const b=ev.currentTarget;
+        if(!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent="Wirklich entfernen?"; return; }
+        delete S.abs[key]; saveSettings(); closeSheet(); render(); toast("Abwesenheit entfernt"); };
+  });
+}
+
+function buildCsv(list, absKeys){
   const n=v=>v.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2});
   const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
   const rows=[["Datum","Wochentag","Job","Beginn","Ende","Pause (min)","Arbeitszeit (h:mm)","Arbeitszeit (dezimal)","Stundenlohn (€)","Verdienst (€)","Notiz"]];
   for(const e of list){ const d=new Date(e.start), j=jobById(e.job), h=net(e)/3600000;
     rows.push([`${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`, WDL[d.getDay()], j.name, hm(e.start), hm(e.end), Math.round(ePause(e)/60000), fmtHM(net(e)), n(h), j.rate?n(j.rate):"", j.rate?n(j.rate*h):"", e.note||""]); }
+  for(const k of absKeys||[]){ const [Y,M,D]=k.split("-").map(Number), d=new Date(Y,M-1,D);
+    rows.push([`${pad(D)}.${pad(M)}.${Y}`, WDL[d.getDay()], ABS[S.abs[k]].l, "", "", "", "0:00", n(0), "", "", "Abwesenheit"]); }
+  rows.splice(1, rows.length-1, ...rows.slice(1).sort((x,y)=>x[0].split(".").reverse().join("").localeCompare(y[0].split(".").reverse().join(""))));
   const tot=list.reduce((s,e)=>s+net(e),0);
   rows.push(["Summe","","","","","",fmtHM(tot),n(tot/3600000),"",n(list.reduce((s,e)=>s+(jobById(e.job).rate||0)*net(e)/3600000,0)),""]);
   return "﻿"+rows.map(r=>r.map(q).join(";")).join("\r\n");
 }
 async function exportCsv(){
-  const [a,b]=range(); const list=entriesIn(a,b);
-  if(!list.length){ toast("Keine abgeschlossenen Einträge in diesem Zeitraum."); return; }
+  const [a,b]=range(); const list=entriesIn(a,b), ak=absIn(a,b);
+  if(!list.length && !ak.length){ toast("Keine abgeschlossenen Einträge in diesem Zeitraum."); return; }
   const tag = UI.view==="day"?dayKey(a):UI.view==="week"?`${a.getFullYear()}-KW${pad(isoWeek(a))}`:monKey(a);
-  const csv=buildCsv(list), name=`Zeiterfassung_${tag}.csv`;
+  const csv=buildCsv(list, ak), name=`Zeiterfassung_${tag}.csv`;
   try{
     const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
     const file=new File([blob],name,{type:"text/csv"});
@@ -758,6 +828,8 @@ document.addEventListener("click",ev=>{
     UI.anchor = UI.view==="day"?addDays(a,s):UI.view==="week"?addDays(a,7*s):new Date(a.getFullYear(),a.getMonth()+s,1); renderReport(); }
   else if(t.id==="btnAdd") entrySheet(null);
   else if(t.id==="btnJobs") jobsSheet();
+  else if(t.id==="btnAbs") absSheet(null);
+  else if(t.dataset.abs) absSheet(t.dataset.abs);
   else if(t.id==="btnExport") exportCsv();
 });
 $("ptitle").addEventListener("click",()=>{ UI.anchor=new Date(); renderReport(); });
